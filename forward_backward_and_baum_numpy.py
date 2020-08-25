@@ -37,9 +37,9 @@ B = np.array(((0.5, 0.5),
 
 pi = np.array((0.333, 0.333, 0.333))
 
-prova = HmmBuilder(observations, states, A_mod1, pi, B)
-print(prova.viterbi())
-'''
+# prova = HmmBuilder(observations, states, A_mod1, pi, B)
+# print(prova.viterbi())
+
 # forward_backward_procedure
 def forward_step_numpy(n_obs, n_states, start_prob, emis_prob, emis, obs, transition_prob):
     # initialize alpha, c0
@@ -188,33 +188,62 @@ def unique_observation(obs):
     return np.asarray(emis)
 
 
+# TODO: implementa di nuovo Viterbi perchè c'è qualcosa che non va
+'''
+function
+VITERBI{(O, S,\Pi, Y, A, B):X}
+for each state{i = 1, 2,.., K} do
+    T_{1}[i, 1] <- pi{i} * B_{iy_{1}
+    T_{2}[i, 1] <- 0}
+for each observation j = 2, 3,.., T do
+    for each state i = 1, 2,.., K do
+        T_{1}[i, j] <- \max_{k} {(T_{1}[k, j-1] * A_{ki} * B_{iy_{j}})}}
+        T_{2}[i, j] <- \arg \max_{k} {(T_{1}[k, j-1] * A_{ki} * B_{iy_{j}})}}
+z_{T} <- \arg \max_{k} {(T_{1}[k, T])}}z_{T}\gets \arg \max_{k}{(T_{1}[k, T])}
+x_{T} <-s_{z_{T}}}
+for j = T, T - 1,.., 2 do
+    z_{j - 1} <-T_{2}[z_{j}, j]}
+    x_{j - 1} <-s_z_{j - 1}}}
+return X'''
+
+def other_viterbi(obs, states, start_p, trans_p, emit_p):
+    t1 = np.zeros((len(obs), len(states)))
+    t2 = np.zeros((len(obs), len(states)))
+    emit = unique_observation(obs)
+    t1[:, 0] = emit_p[:, np.where(emit == obs[0])[0][0]].dot(trans_p)
+    return None
+
+
+
 def viterbi(obs, states, start_p, trans_p, emit_p):
     emis = unique_observation(obs)
     V1 = np.zeros((len(obs), len(states)))
     V2 = np.empty([len(obs), len(states)], dtype=object)
+    emit_p = np.log(emit_p)
+    start_p = np.log(start_p)
+    trans_p = np.log(trans_p)
 
-    V1[0, :] = start_p * emit_p[:, np.where(emis == obs[0])[0][0]]
+    V1[0, :] = emit_p[:, np.where(emis == obs[0])[0][0]] + start_p
     # Run Viterbi when t > 0
 
     for t in range(1, len(obs)):
         for st in range(len(states)):
-            max_tr_prob = V1[t - 1, 0] * trans_p[0, st]
+            max_tr_prob = V1[t - 1, 0] + trans_p[0, st]
             prev_st_selected = states[0]
             for prev_st in range(1, len(states)):
-                tr_prob = V1[t - 1, prev_st] * trans_p[prev_st, st]
+                tr_prob = V1[t - 1, prev_st] + trans_p[prev_st, st]
                 if tr_prob > max_tr_prob:
                     max_tr_prob = tr_prob
                     prev_st_selected = states[prev_st]
-            max_prob = max_tr_prob * emit_p[st, np.where(emis == obs[t])[0][0]]
+            max_prob = max_tr_prob + emit_p[st, np.where(emis == obs[t])[0][0]]
             V1[t, st] = max_prob
             V2[t, st] = prev_st_selected
 
-    max_prob = 0.0
+    max_prob = - np.inf
     opt = []
     best_st = ''
     # Get most probable state and its backtrack
     for i in range(len(states)):
-
         if V1[-1, i] > max_prob:
             max_prob = V1[-1, i]
             best_st = states[i]
@@ -223,7 +252,7 @@ def viterbi(obs, states, start_p, trans_p, emit_p):
 
     # Follow the backtrack till the first observation
     for t in range(len(obs) - 2, -1, -1):
-        opt.insert(0, V2[t + 1, np.where(np.asarray(states) == previous)][0][0])
+        opt.insert(0, V2[t + 1, np.where(np.asarray(states) == previous)[0][0]])
         previous = V2[t + 1, np.where(np.asarray(states) == previous)[0][0]]
 
     return opt, max_prob
@@ -258,6 +287,49 @@ emit_p_d = {
     "Healthy": {"normal": 0.5, "cold": 0.4, "dizzy": 0.1},
     "Fever": {"normal": 0.1, "cold": 0.3, "dizzy": 0.6},
 }
+
+def viterbi(obs, states, start_p, trans_p, emit_p):
+    V = [{}]
+    for st in states:
+        V[0][st] = {"prob": start_p[st] * emit_p[st][obs[0]], "prev": None}
+    # Run Viterbi when t > 0
+    for t in range(1, len(obs)):
+        V.append({})
+        for st in states:
+            max_tr_prob = V[t - 1][states[0]]["prob"] * trans_p[states[0]][st]
+            prev_st_selected = states[0]
+            for prev_st in states[1:]:
+                tr_prob = V[t - 1][prev_st]["prob"] * trans_p[prev_st][st]
+                if tr_prob > max_tr_prob:
+                    max_tr_prob = tr_prob
+                    prev_st_selected = prev_st
+
+            max_prob = max_tr_prob * emit_p[st][obs[t]]
+            V[t][st] = {"prob": max_prob, "prev": prev_st_selected}
+    opt = []
+    max_prob = 0.0
+    previous = None
+    # Get most probable state and its backtrack
+    for st, data in V[-1].items():
+        if data["prob"] > max_prob:
+            max_prob = data["prob"]
+            best_st = st
+    opt.append(best_st)
+    previous = best_st
+
+    # Follow the backtrack till the first observation
+    for t in range(len(V) - 2, -1, -1):
+        opt.insert(0, V[t + 1][previous]["prev"])
+        previous = V[t + 1][previous]["prev"]
+
+    print('The steps of states are ' + ' '.join(opt) + ' with highest probability of %s' % max_prob)
+
+
+
+
+
+
+
 
 def unique_observation(obs):
     emis = []
@@ -329,4 +401,3 @@ def viterbi(obs, states, start_p, trans_p, emit_p):
         previous = V2[t + 1, np.where(np.asarray(states) == previous)[0][0]]
 
     return opt, max_prob
-'''

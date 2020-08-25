@@ -1,13 +1,13 @@
 import numpy as np
 class HmmBuilder:
-    def __init__(self, obs, states, A, pi, B):
+    def __init__(self, obs, states, start_probability, transition_probability, emission_probability):
         self.obs = obs
         self.n_obs = len(obs)
         self.states = states
         self.n_states = len(states)
-        self.start_prob = pi
-        self.trans_prob = A
-        self.emit_prob = B
+        self.start_prob = start_probability
+        self.trans_prob = transition_probability
+        self.emit_prob = emission_probability
         self.emit = self.emissions_symbols()
 
     def emissions_symbols(self):
@@ -89,7 +89,7 @@ class HmmBuilder:
         max_iter = 10000
         likelihoods = np.zeros(max_iter)
         old_log_prob = -1000000
-        temp = HmmBuilder(self.obs, self.states, self.trans_prob, self.start_prob, self.emit_prob)
+        temp = HmmBuilder(self.obs, self.states, self.start_prob, self.trans_prob, self.emit_prob)
         for i in range(max_iter):
             alpha, scale = temp.forward_step_numpy()
             beta = temp.backward_step_numpy(scale)
@@ -99,7 +99,7 @@ class HmmBuilder:
             if abs(log_p - old_log_prob) <= 0.0001:
                 return start_prob, trans_prob, emit_prob, likelihoods[:(i + 1)]
             old_log_prob = log_p
-            temp = HmmBuilder(self.obs, self.states, trans_prob, start_prob, emit_prob)
+            temp = HmmBuilder(self.obs, self.states, start_prob, trans_prob, emit_prob)
         return start_prob, trans_prob, emit_prob, likelihoods
 
     def plot(self, likelihood):
@@ -128,24 +128,27 @@ class HmmBuilder:
         V2 = np.empty([self.n_obs, self.n_states], dtype=object)
 
         start_prob, trans_prob, emit_prob, likelihoods = self.hmm_numpy()
+        start_prob = np.log(start_prob + 0.00001)
+        trans_prob = np.log(trans_prob + 0.00001)
+        emit_prob = np.log(emit_prob + 0.00001)
 
-        V1[0, :] = start_prob * emit_prob[:, np.where(self.emit == self.obs[0])[0][0]]
+        V1[0, :] = emit_prob[:, np.where(self.emit == self.obs[0])[0][0]] + start_prob
         # Run Viterbi when t > 0
 
         for t in range(1, self.n_obs):
             for st in range(self.n_states):
-                max_tr_prob = V1[t - 1, 0] * trans_prob[0, st]
+                max_tr_prob = V1[t - 1, 0] + trans_prob[0, st]
                 prev_st_selected = self.states[0]
                 for prev_st in range(1, self.n_states):
-                    tr_prob = V1[t - 1, prev_st] * trans_prob[prev_st, st]
+                    tr_prob = V1[t - 1, prev_st] + trans_prob[prev_st, st]
                     if tr_prob > max_tr_prob:
                         max_tr_prob = tr_prob
                         prev_st_selected = self.states[prev_st]
-                max_prob = max_tr_prob * emit_prob[st, np.where(self.emit == self.obs[t])[0][0]]
+                max_prob = max_tr_prob + emit_prob[st, np.where(self.emit == self.obs[t])[0][0]]
                 V1[t, st] = max_prob
                 V2[t, st] = prev_st_selected
 
-        max_prob = 0.0
+        max_prob = -np.inf
         opt = []
         best_st = ''
         # Get most probable state and its backtrack
@@ -158,11 +161,10 @@ class HmmBuilder:
         previous = best_st
         # Follow the backtrack till the first observation
         for t in range(self.n_obs - 2, -1, -1):
-            # print(V2[t + 1, np.where(np.asarray(self.states) == previous)][0][0])
-            opt.insert(0, V2[t + 1, np.where(np.asarray(self.states) == previous)][0][0])
+            opt.insert(0, V2[t + 1, np.where(np.asarray(self.states) == previous)[0][0]])
             previous = V2[t + 1, np.where(np.asarray(self.states) == previous)[0][0]]
 
-        return np.asarray(opt), max_prob
+        return np.asarray(opt), np.exp(max_prob)
 
 
 # hmm = HmmBuilder(observation, states, trans_p, start_p, emit_p)

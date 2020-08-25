@@ -48,25 +48,54 @@ def hyper_parameters(obs, hidden_states, emit):
     B = np.random.dirichlet(np.ones(len(emit)), size=len(hidden_states))
     return pi, A, B
 
+def dict_creator(true_seq, states):
+    d = {}
+    for i in states:
+        d[i] = [0, np.count_nonzero(true_seq == i)]
+    return d
+
 
 for day in range(len(dates)):
     sensors_obs = np.asarray(df.loc[df.Date == dates[day]].Sensors_code)
     true_seq_activity = np.asarray(df.loc[df.Date == dates[day]].Action)
-
     states = unique_observation(true_seq_activity)
-    observations = sensors_obs
-    emits = unique_observation(observations)
+    emits = unique_observation(sensors_obs)
+    start_p, trans_p, emit_p = hyper_parameters(sensors_obs, states, emits)
+    hmm_homemade = HmmBuilder(sensors_obs, states, start_p, trans_p, emit_p)
 
+    start_p, trans_p, emit_p, lik = hmm_homemade.hmm_numpy()
+    pred_seq = hmm_homemade.viterbi()[0]
+    print(pred_seq)
+    d = dict_creator(true_seq_activity, states)
 
+    for i in range(len(pred_seq)):
+        if pred_seq[i] == true_seq_activity[i]:
+            d[pred_seq[i]] = [(d[pred_seq[i]][0] + 1) / d[pred_seq[i]][1],  d[pred_seq[i]][1]]
+    print(d)
+
+'''
 # print(len(states))
 
-start_p, trans_p, emit_p = hyper_parameters(observations, states, emits)
+obs = []
+true_seq_activity = []
+for day in range(len(dates)):
+    obs.extend(list(df.loc[df.Date == dates[day]].Sensors_code.values))
+    true_seq_activity.extend(list(df.loc[df.Date == dates[day]].Action.values))
 
-hmm_homemade = HmmBuilder(observations, states, trans_p, start_p, emit_p)
+states = unique_observation(np.asarray(true_seq_activity))
+
+emits = unique_observation(np.asarray(obs))
+start_p, trans_p, emit_p = hyper_parameters(np.asarray(obs), states, emits)
+
+hmm_homemade = HmmBuilder(np.asarray(obs), states, start_p, trans_p, emit_p)
+# alpha, scale = hmm_homemade.forward_step_numpy()
+# beta = hmm_homemade.backward_step_numpy(scale)
+# print(hmm_homemade.hmm_numpy())
+# print(hmm_homemade.viterbi())
+
 pred_seq = hmm_homemade.viterbi()[0]
 print(sum(pred_seq == true_seq_activity) / len(true_seq_activity))
-
-
+'''
 '''
 states = unique_observation(true_seq_activity)
 observations = sensors_obs
