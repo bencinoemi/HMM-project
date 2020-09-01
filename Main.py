@@ -7,13 +7,12 @@ sensors = pd.read_csv('/home/noe/Università/in_corso/Machine Learning/progetto/
 
 activity_list = pd.read_csv('/home/noe/Università/in_corso/Machine Learning/progetto/dataset/subject1/Activities.csv')
 
-data = pd.read_csv('/home/noe/Università/in_corso/Machine Learning/progetto/dataset/subject1/activity_sub1.csv',
+data_1 = pd.read_csv('/home/noe/Università/in_corso/Machine Learning/progetto/dataset/subject1/activity_sub1.csv',
                    header=None, names=['Action', 'Date', 'Activity_start', 'Activity_end', 'Sensors_code',
                                        'Sensors_name', 'start_time', 'end_time'])
-
-# print(s)
-# print(activity_list)
-# print(data.head())
+data_2 = pd.read_csv('/home/noe/Università/in_corso/Machine Learning/progetto/dataset/subject2/activity_sub2.csv',
+                   header=None, names=['Action', 'Date', 'Activity_start', 'Activity_end', 'Sensors_code',
+                                       'Sensors_name', 'start_time', 'end_time'])
 
 activities = np.asarray(activity_list['Subcategory'])
 # print(activities)
@@ -21,26 +20,38 @@ activities = np.asarray(activity_list['Subcategory'])
 # data[1] = pd.to_datetime(data[1]).dt.date
 # print(data[1].unique())
 # days = data[1].unique()
+print(data_2['Date'].unique())
+data_1['Date'] = pd.to_datetime(data_1['Date'], format='%m/%d/%Y')
+data_1['start_time'] = pd.to_datetime(data_1['start_time'], format="%H:%M:%S")
+data_1['end_time'] = pd.to_datetime(data_1['end_time'], format="%H:%M:%S")
 
-data['Date'] = [datetime.strptime(x, "%m/%d/%Y").date() for x in data['Date']]
-data['start_time'] = [datetime.strptime(x, "%H:%M:%S").time() for x in data['start_time']]
-data['end_time'] = [datetime.strptime(x, "%H:%M:%S").time() for x in data['end_time']]
+df_1 = pd.merge(data_1, sensors)
+df_1 = df_1.sort_values(['Date', 'start_time'])
+
+dates_1 = df_1.Date.unique()
+times_1 = df_1.start_time.unique()
+
+data_2['Date'].unique()
+# data_2['Date'] = pd.to_datetime(data_2['Date'], format='%m/%d/%Y')
 
 
-df = pd.merge(data, sensors)
-df = df.sort_values(['Date', 'start_time'])
+data_2['start_time'] = [datetime.strptime(x, "%H:%M:%S").time() for x in data_2['start_time']]
+data_2['end_time'] = [datetime.strptime(x, "%H:%M:%S").time() for x in data_2['end_time']]
+df_2 = pd.merge(data_2, sensors)
+df_2 = df_2.sort_values(['Date', 'start_time'])
 
-dates = df.Date.unique()
-times = df.start_time.unique()
+dates_2 = df_2.Date.unique()
 
-def unique_observation(obs):
-    emis = []
-    for i in obs:
-        if i not in emis:
-            emis.append(i)
-    return np.asarray(emis)
+times_2 = df_2.start_time.unique()
 
-def hyper_parameters(obs, hidden_states, emit):
+def unique_observation(seq):
+    unique_seq = []
+    for i in seq:
+        if i not in unique_seq:
+            unique_seq.append(i)
+    return np.asarray(unique_seq)
+
+def hyper_parameters(hidden_states, emit):
     pi = np.random.dirichlet(np.ones(len(hidden_states)))
 
     A = np.random.dirichlet(np.ones(len(hidden_states)), size=len(hidden_states))
@@ -48,19 +59,31 @@ def hyper_parameters(obs, hidden_states, emit):
     B = np.random.dirichlet(np.ones(len(emit)), size=len(hidden_states))
     return pi, A, B
 
-def dict_creator(true_seq, states):
-    d = {}
-    for i in states:
-        d[i] = [0, np.count_nonzero(true_seq == i)]
-    return d
 
+def hyper_parameters_equals(hidden_states, emit):
+    pi = np.array(np.repeat(1/len(hidden_states), len(hidden_states)))
 
+    A = np.repeat((np.repeat(1/len(hidden_states), len(hidden_states))), len(hidden_states))
+    A.resize(len(hidden_states), len(hidden_states))
+
+    B = np.repeat((np.repeat(1/len(emit), len(emit))), len(hidden_states))
+    B.resize(len(hidden_states), len(emit))
+
+    return pi, A, B
+
+def dict_creator(true_seq, h_states):
+    dct = {}
+    for s in h_states:
+        dct[s] = [0, sum(np.asarray(true_seq) == s)]
+    return dct
+
+'''
 for day in range(len(dates)):
     sensors_obs = np.asarray(df.loc[df.Date == dates[day]].Sensors_code)
     true_seq_activity = np.asarray(df.loc[df.Date == dates[day]].Action)
     states = unique_observation(true_seq_activity)
     emits = unique_observation(sensors_obs)
-    start_p, trans_p, emit_p = hyper_parameters(sensors_obs, states, emits)
+    start_p, trans_p, emit_p = hyper_parameters(states, emits)
     hmm_homemade = HmmBuilder(sensors_obs, states, start_p, trans_p, emit_p)
 
     start_p, trans_p, emit_p, lik = hmm_homemade.hmm_numpy()
@@ -74,42 +97,152 @@ for day in range(len(dates)):
     print(d)
 
 '''
-# print(len(states))
 
+'''
 obs = []
 true_seq_activity = []
 for day in range(len(dates)):
     obs.extend(list(df.loc[df.Date == dates[day]].Sensors_code.values))
     true_seq_activity.extend(list(df.loc[df.Date == dates[day]].Action.values))
 
-states = unique_observation(np.asarray(true_seq_activity))
+states = unique_observation(true_seq_activity)
 
 emits = unique_observation(np.asarray(obs))
-start_p, trans_p, emit_p = hyper_parameters(np.asarray(obs), states, emits)
+start_p, trans_p, emit_p = hyper_parameters(states, emits)
 
 hmm_homemade = HmmBuilder(np.asarray(obs), states, start_p, trans_p, emit_p)
 # alpha, scale = hmm_homemade.forward_step_numpy()
 # beta = hmm_homemade.backward_step_numpy(scale)
 # print(hmm_homemade.hmm_numpy())
 # print(hmm_homemade.viterbi())
+d = dict_creator(np.asarray(true_seq_activity), np.asarray(states))
 
 pred_seq = hmm_homemade.viterbi()[0]
-print(sum(pred_seq == true_seq_activity) / len(true_seq_activity))
-'''
-'''
-states = unique_observation(true_seq_activity)
-observations = sensors_obs
-emits = unique_observation(observations)
-
-start_p, trans_p, emit_p = hyper_parameters(observations, states, emits)
-
-hmm_homemade = HmmBuilder(observations, states, trans_p, start_p, emit_p)
-print(hmm_homemade.viterbi())
-pred_seq = hmm_homemade.viterbi()[0]
-# print(pred_seq)
+# print(sum(pred_seq == true_seq_activity) / len(true_seq_activity))
 # print(true_seq_activity)
-print(sum(pred_seq == true_seq_activity) / len(true_seq_activity))
+
+for i in range(len(pred_seq)):
+    if pred_seq[i] == true_seq_activity[i]:
+        d[pred_seq[i]] = [(d[pred_seq[i]][0] + 1) / d[pred_seq[i]][1], d[pred_seq[i]][1]]
+print(hmm_homemade.plot(hmm_homemade.get_likelihood()))
 '''
+# #### TRY 26/08/2020
+# initialization of the parameters in a peculiar way
+
+#
+
+def init_start_prob(unique_states, seq):
+    '''
+    Every prior prob i is:
+    #of state i observed / #obs
+    '''
+    pi = []
+    for s in unique_states:
+        pi.append(sum(np.asarray(seq) == s))
+    return np.asarray(pi) / len(seq)
+
+def init_trans_prob(seq, unique_states):
+    '''
+    Every trans prob i, j is:
+    #number of times the state i is followed by state j / #of times the state i appears
+    '''
+    a = np.zeros((len(unique_states), len(unique_states)))
+    for s in range(len(unique_states)):
+        for st in range(len(unique_states)):
+            for t in range(len(seq) - 1):
+                if seq[t] == unique_states[s] and seq[t + 1] == unique_states[st]:
+                    a[s, st] += 1
+        if seq[-1] == unique_states[s]:
+            den = sum(np.asarray(seq) == unique_states[s]) - 1
+        else:
+            den = sum(np.asarray(seq) == unique_states[s])
+        a[s] = a[s] / den
+    return a
+
+# every emit prob i, k is: #number of times the sensor k is observed in state i/ #obs
+def init_emit_prob(emits, states, obs, true_seq_activity):
+    b = np.zeros((len(states), len(emits)))
+    for s in range(len(states)):
+        for t in range(len(obs)):
+            if true_seq_activity[t] == states[s]:
+                for e in range(len(emits)):
+                    if obs[t] == emits[e]:
+                        b[s, e] += 1
+        b[s] = b[s] / sum(np.asarray(true_seq_activity) == states[s])
+
+    return b
+
+
+# obs = []
+# true_seq_activity = []
+
+# for day in range(len(dates)):
+#     obs.extend(list(df.loc[df.Date == dates[day]].Sensors_code.values))
+#     true_seq_activity.extend(list(df.loc[df.Date == dates[day]].Action.values))
+
+c = 0
+for day in range(len(dates_1)):
+    obs = list(df_1.loc[df_1.Date == dates_1[day]].Sensors_code.values)
+    true_seq_activity = list(df_1.loc[df_1.Date == dates_1[day]].Action.values)
+    states = unique_observation(true_seq_activity)
+
+    emits = unique_observation(np.asarray(obs))
+    start_p = init_start_prob(states, true_seq_activity) + 1e-12
+    trans_p = init_trans_prob(true_seq_activity, states) + 1e-12
+    emit_p = init_emit_prob(emits, states, obs, true_seq_activity) + 1e-12
+
+    hmm_homemade = HmmBuilder(np.asarray(obs), states, start_p, trans_p, emit_p)
+
+    d = dict_creator(np.asarray(true_seq_activity), np.asarray(states))
+
+    pred_seq = hmm_homemade.viterbi()[0]
+
+    for i in range(len(pred_seq)):
+        if pred_seq[i] == true_seq_activity[i]:
+            d[pred_seq[i]] = [(d[pred_seq[i]][0] + 1), d[pred_seq[i]][1]]
+            c += 1
+
+    print('subject_1', d)
+    print( true_seq_activity, pred_seq)
+
+print('subject_1', c / data_1.shape[0])
+
+
+for day in range(len(dates_2)):
+    obs = list(df_2.loc[df_2.Date == dates_2[day]].Sensors_code.values)
+    true_seq_activity = list(df_2.loc[df_2.Date == dates_2[day]].Action.values)
+    states = unique_observation(true_seq_activity)
+
+    emits = unique_observation(np.asarray(obs))
+    start_p = init_start_prob(states, true_seq_activity) + 1e-12
+    trans_p = init_trans_prob(true_seq_activity, states) + 1e-12
+    emit_p = init_emit_prob(emits, states, obs, true_seq_activity) + 1e-12
+
+    hmm_homemade = HmmBuilder(np.asarray(obs), states, start_p, trans_p, emit_p)
+
+    d = dict_creator(np.asarray(true_seq_activity), np.asarray(states))
+
+    pred_seq = hmm_homemade.viterbi()[0]
+
+    for i in range(len(pred_seq)):
+        if pred_seq[i] == true_seq_activity[i]:
+            d[pred_seq[i]] = [(d[pred_seq[i]][0] + 1) / d[pred_seq[i]][1], d[pred_seq[i]][1]]
+
+    print(d)
+    print(sum(pred_seq == true_seq_activity) / len(true_seq_activity))
+
+'''
+d = dict_creator(np.asarray(true_seq_activity), np.asarray(states))
+pred_seq_1 = hmm_homemade.viterbi()[0]
+for i in range(len(pred_seq_1)):
+    if pred_seq_1[i] == true_seq_activity[i]:
+        d[pred_seq_1[i]] = [(d[pred_seq_1[i]][0] + 1) / d[pred_seq_1[i]][1], d[pred_seq_1[i]][1]]
+
+
+print(hmm_homemade.viterbi())
+hmm_homemade.plot(hmm_homemade.get_likelihood())
+'''
+
 
 # FIRST STAGE
 # hidden_states ==> Location

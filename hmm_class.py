@@ -22,11 +22,12 @@ class HmmBuilder:
         alpha = np.zeros((self.n_obs, self.n_states))
         scale_factor = np.zeros(self.n_obs)
         # compute alpha_0(i)
+
         alpha[0] = self.start_prob * self.emit_prob[:, np.where(self.emit == self.obs[0])[0][0]]
         # scaling alpha_0(i)
         scale_factor[0] = 1 / sum(alpha[0])
-        alpha[0] = scale_factor[0] * alpha[0]
 
+        alpha[0] = scale_factor[0] * alpha[0]
         # compute alpha_t(i)
         for t in range(1, self.n_obs):
             alpha[t] = alpha[t - 1].dot(self.trans_prob) * self.emit_prob[:, np.where(self.emit == self.obs[t])[0][0]]
@@ -96,7 +97,7 @@ class HmmBuilder:
             start_prob, trans_prob, emit_prob = temp.baum_welch_algorithm_numpy(alpha, beta)
             log_p = temp.log_prob(scale)
             likelihoods[i] = log_p
-            if abs(log_p - old_log_prob) <= 0.0001:
+            if abs(log_p - old_log_prob) <= 0.00001:
                 return start_prob, trans_prob, emit_prob, likelihoods[:(i + 1)]
             old_log_prob = log_p
             temp = HmmBuilder(self.obs, self.states, start_prob, trans_prob, emit_prob)
