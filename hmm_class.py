@@ -8,11 +8,11 @@ class HmmBuilder:
         self.start_prob = start_probability
         self.trans_prob = transition_probability
         self.emit_prob = emission_probability
-        self.emit = self.emissions_symbols()
+        self.emit = self.emissions_symbols(self.obs)
 
-    def emissions_symbols(self):
+    def emissions_symbols(self, obs):
         emit = []
-        for i in self.obs:
+        for i in obs:
             if i not in emit:
                 emit.append(i)
         return np.asarray(emit)
@@ -83,8 +83,8 @@ class HmmBuilder:
         # print(np.sum(new_start_prob), np.sum(new_trans_prob, axis=1), np.sum(new_emit_prob, axis=1))
         return new_start_prob, new_trans_prob, new_emit_prob
 
-    def log_prob(self, scale_factor):
-        return - np.log(sum(scale_factor))
+    def log_prob(self):
+        return - np.log(sum(self.forward_step_numpy()[1]))
 
     def hmm_numpy(self):
         max_iter = 10000
@@ -95,17 +95,25 @@ class HmmBuilder:
             alpha, scale = temp.forward_step_numpy()
             beta = temp.backward_step_numpy(scale)
             start_prob, trans_prob, emit_prob = temp.baum_welch_algorithm_numpy(alpha, beta)
-            log_p = temp.log_prob(scale)
+            log_p = temp.log_prob()
             likelihoods[i] = log_p
-            if abs(log_p - old_log_prob) <= 0.00001:
+            if abs(log_p - old_log_prob) <= 1e-5:
                 return start_prob, trans_prob, emit_prob, likelihoods[:(i + 1)]
             old_log_prob = log_p
             temp = HmmBuilder(self.obs, self.states, start_prob, trans_prob, emit_prob)
         return start_prob, trans_prob, emit_prob, likelihoods
 
-    def plot(self, likelihood):
+    def plot(self):
         import matplotlib.pyplot as plt
-        plt.plot(likelihood)
+        plt.plot(self.get_likelihood())
+        plt.show()
+
+    def plot_startprob(self):
+        import matplotlib.pyplot as plt
+        plt.plot(self.get_start_prob(), label='start_p')
+        plt.plot(self.get_trans_prob(), label='trans_p')
+        plt.plot(self.get_emis_prob(), label='emit_p')
+        plt.legend()
         plt.show()
 
     def get_start_prob(self):
@@ -164,6 +172,49 @@ class HmmBuilder:
         for t in range(self.n_obs - 2, -1, -1):
             opt.insert(0, V2[t + 1, np.where(np.asarray(self.states) == previous)[0][0]])
             previous = V2[t + 1, np.where(np.asarray(self.states) == previous)[0][0]]
+
+        return np.asarray(opt), np.exp(max_prob)
+
+    def viterbi_to_test(self, obs, states, start_prob, trans_prob, emit_prob):
+        V1 = np.zeros((len(obs), len(states)))
+        V2 = np.empty([len(obs), len(states)], dtype=object)
+
+        start_prob = np.log(start_prob + 0.00001)
+        trans_prob = np.log(trans_prob + 0.00001)
+        emit_prob = np.log(emit_prob + 0.00001)
+
+        emit = self.emissions_symbols(obs)
+        V1[0, :] = emit_prob[:, np.where(emit == obs[0])[0][0]] + start_prob
+        # Run Viterbi when t > 0
+
+        for t in range(1, len(obs)):
+            for st in range(len(states)):
+                max_tr_prob = V1[t - 1, 0] + trans_prob[0, st]
+                prev_st_selected = states[0]
+                for prev_st in range(1, len(states)):
+                    tr_prob = V1[t - 1, prev_st] + trans_prob[prev_st, st]
+                    if tr_prob > max_tr_prob:
+                        max_tr_prob = tr_prob
+                        prev_st_selected = states[prev_st]
+                max_prob = max_tr_prob + emit_prob[st, np.where(emit == obs[t])[0][0]]
+                V1[t, st] = max_prob
+                V2[t, st] = prev_st_selected
+
+        max_prob = -np.inf
+        opt = []
+        best_st = ''
+        # Get most probable state and its backtrack
+        for i in range(len(states)):
+            if V1[-1, i] > max_prob:
+                max_prob = V1[-1, i]
+                best_st = states[i]
+
+        opt.append(best_st)
+        previous = best_st
+        # Follow the backtrack till the first observation
+        for t in range(len(obs) - 2, -1, -1):
+            opt.insert(0, V2[t + 1, np.where(np.asarray(states) == previous)[0][0]])
+            previous = V2[t + 1, np.where(np.asarray(states) == previous)[0][0]]
 
         return np.asarray(opt), np.exp(max_prob)
 
