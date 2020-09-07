@@ -1,6 +1,6 @@
 import numpy as np
 class HmmBuilder:
-    def __init__(self, obs, states, start_probability, transition_probability, emission_probability, emit):
+    def __init__(self, obs, states, start_probability, transition_probability, emission_probability):
         self.obs = obs
         self.n_obs = len(obs)
         self.states = states
@@ -8,10 +8,9 @@ class HmmBuilder:
         self.start_prob = start_probability
         self.trans_prob = transition_probability
         self.emit_prob = emission_probability
-        self.emit = emit
+        self.emit = self.emissions_symbols(self.obs)
 
-    @staticmethod
-    def emissions_symbols(obs):
+    def emissions_symbols(self, obs):
         emit = []
         for i in obs:
             if i not in emit:
@@ -91,7 +90,7 @@ class HmmBuilder:
         max_iter = 10000
         likelihoods = np.zeros(max_iter)
         old_log_prob = -1000000
-        temp = HmmBuilder(self.obs, self.states, self.start_prob, self.trans_prob, self.emit_prob, self.emit)
+        temp = HmmBuilder(self.obs, self.states, self.start_prob, self.trans_prob, self.emit_prob)
         for i in range(max_iter):
             alpha, scale = temp.forward_step_numpy()
             beta = temp.backward_step_numpy(scale)
@@ -101,7 +100,7 @@ class HmmBuilder:
             if abs(log_p - old_log_prob) <= 1e-5:
                 return start_prob, trans_prob, emit_prob, likelihoods[:(i + 1)]
             old_log_prob = log_p
-            temp = HmmBuilder(self.obs, self.states, start_prob, trans_prob, emit_prob, self.emit)
+            temp = HmmBuilder(self.obs, self.states, start_prob, trans_prob, emit_prob)
         return start_prob, trans_prob, emit_prob, likelihoods
 
     def plot(self):
